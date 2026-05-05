@@ -34,7 +34,6 @@ jobs:
 
       - name: Run ontology QC checks
         id: qc
-        continue-on-error: true
         run: |
           cd src/ontology
           make test
@@ -59,7 +58,3 @@ jobs:
             -f context='DISPATCHED_ONTOLOGY_QC_STATUS' \
             -f description="$description" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-          if [ "$state" != "success" ]; then
-            exit 1
-          fi
