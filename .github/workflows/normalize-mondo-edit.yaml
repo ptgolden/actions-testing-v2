@@ -9,6 +9,9 @@ on:
       same_repo:
         required: true
         type: boolean
+      pr_repo:
+        required: true
+        type: string
     outputs:
       pushed:
         description: "Whether normalization pushed a new commit"
@@ -19,26 +22,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pushed: ${{ steps.push.outputs.pushed }}
+    permissions:
+      actions: write
+      contents: write
 
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        if: ${{ inputs.same_repo }}
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.NORMALIZER_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.NORMALIZER_BOT_PRIVATE_KEY }}
       - uses: actions/checkout@v4
         with:
+          repository: ${{ inputs.pr_repo }}
           ref: ${{ inputs.pr_branch }}
           fetch-depth: 1
-          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
       - name: Configure git
         if: ${{ inputs.same_repo }}
         run: |
-          git config --global user.name "normalizer-bot[bot]"
-          git config --global user.email "normalizer-bot[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Normalize PR file
@@ -48,13 +48,15 @@ jobs:
 
       - name: Commit and push if changed
         id: push
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet -- src/ontology/mondo-edit.obo; then
             echo "pushed=false" >> "$GITHUB_OUTPUT"
-          elif ${{ inputs.same_repo }}; then
+          elif [ "${{ inputs.same_repo }}" = "true" ]; then
             git add src/ontology/mondo-edit.obo
             git commit -m "Normalize mondo-edit.obo"
-            git push origin "HEAD:${{ inputs.pr_branch }}"
+            git -c http.extraheader="AUTHORIZATION: bearer $GITHUB_TOKEN" push origin "HEAD:${{ inputs.pr_branch }}"
             echo "pushed=true" >> "$GITHUB_OUTPUT"
           else
             echo "::error file=src/ontology/mondo-edit.obo::mondo-edit.obo is not normalized. Fork PRs cannot be auto-normalized; please run 'make NORM && mv NORM mondo-edit.obo' and commit the result."
@@ -62,3 +64,13 @@ jobs:
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
+
+      - name: Trigger QC on normalized branch
+        if: ${{ inputs.same_repo }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/qc.yaml/dispatches" \
+            -f ref='${{ inputs.pr_branch }}'
