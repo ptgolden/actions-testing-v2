@@ -52,11 +52,13 @@ jobs:
         run: |
           if git diff --quiet -- src/ontology/mondo-edit.obo; then
             echo "pushed=false" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           elif [ "${{ inputs.same_repo }}" = "true" ]; then
             git add src/ontology/mondo-edit.obo
             git commit -m "Normalize mondo-edit.obo"
             git push origin "HEAD:${{ inputs.pr_branch }}"
             echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           else
             echo "::error file=src/ontology/mondo-edit.obo::mondo-edit.obo is not normalized. Fork PRs cannot be auto-normalized; please run 'make NORM && mv NORM mondo-edit.obo' and commit the result."
             git --no-pager diff -- src/ontology/mondo-edit.obo
@@ -72,4 +74,5 @@ jobs:
           gh api \
             --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/qc.yaml/dispatches" \
-            -f ref='${{ inputs.pr_branch }}'
+            -f ref='${{ inputs.pr_branch }}' \
+            -f inputs[sha]='${{ steps.push.outputs.sha }}'
