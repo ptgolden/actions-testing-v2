@@ -1,0 +1,48 @@
+name: PR orchestrator
+
+on:
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  # Only allow one run at a time for any PR
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  run_normalize_mondo_edit:
+    uses: ./.github/workflows/normalize-mondo-edit.yaml
+    permissions:
+      contents: write
+    with:
+      pr_branch: ${{ github.event.pull_request.head.ref }}
+      same_repo: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    secrets: inherit
+
+  run_ontology_qc:
+    needs: run_normalize_mondo_edit
+    if: needs.run_normalize_mondo_edit.outputs.pushed != 'true'
+    uses: ./.github/workflows/qc.yaml
+    permissions:
+      contents: read
+    secrets: inherit
+
+  merge_gate:
+    runs-on: ubuntu-latest
+    needs:
+      - run_normalize_mondo_edit
+      - run_ontology_qc
+    if: always()
+    steps:
+      - name: Check orchestrator result
+        run: |
+          normalize="${{ needs.run_normalize_mondo_edit.result }}"
+          qc="${{ needs.run_ontology_qc.result }}"
+
+          if [ "$normalize" != "success" ]; then
+            exit 1
+          fi
+
+          if [ "$qc" != "success" ]; then
+            exit 1
+          fi
