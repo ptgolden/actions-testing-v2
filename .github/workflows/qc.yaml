@@ -1,5 +1,5 @@
 name: Ontology QC
-run-name: Ontology QC for PR #${{ github.event.inputs.pr_number }}
+run-name: Ontology QC for PR \#${{ github.event.inputs.pr_number }}
 
 on:
   workflow_dispatch:
@@ -12,11 +12,10 @@ on:
         type: string
 
 jobs:
-  qc:
-    name: Run ontology QC
+  pending:
+    name: Mark required QC pending
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       statuses: write
 
     steps:
@@ -32,6 +31,17 @@ jobs:
             -f description='Ontology QC is running' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
+  qc:
+    name: Run ontology QC
+    needs: pending
+    runs-on: ubuntu-latest
+    concurrency:
+      group: qc-pr-${{ github.event.inputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+
+    steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha }}
@@ -43,18 +53,33 @@ jobs:
           cd src/ontology
           make test
 
+  report:
+    name: Report required QC status
+    needs: qc
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+
+    steps:
       - name: Report QC status
-        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ steps.qc.outcome }}" = "success" ]; then
-            state="success"
-            description="Ontology QC passed"
-          else
-            state="failure"
-            description="Ontology QC failed"
-          fi
+          case "${{ needs.qc.result }}" in
+            success)
+              state="success"
+              description="Ontology QC passed"
+              ;;
+            cancelled)
+              state="error"
+              description="Ontology QC was cancelled"
+              ;;
+            *)
+              state="failure"
+              description="Ontology QC failed"
+              ;;
+          esac
 
           gh api \
             --method POST \
