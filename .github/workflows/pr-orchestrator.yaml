@@ -19,3 +19,4 @@ jobs:
       pr_branch: ${{ github.event.pull_request.head.ref }}
       same_repo: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
       pr_repo: ${{ github.event.pull_request.head.repo.full_name }}
+      pr_number: ${{ github.event.pull_request.number }}

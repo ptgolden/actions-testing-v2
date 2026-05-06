@@ -1,4 +1,5 @@
 name: Ontology QC
+run-name: Ontology QC for PR #${{ inputs.pr_number }}
 
 on:
   workflow_dispatch:
@@ -6,9 +7,13 @@ on:
       sha:
         required: true
         type: string
+      pr_number:
+        required: true
+        type: string
 
 jobs:
-  ontology_qc:
+  qc:
+    name: Run ontology QC
     runs-on: ubuntu-latest
     permissions:
       contents: read

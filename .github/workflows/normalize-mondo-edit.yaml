@@ -12,6 +12,9 @@ on:
       pr_repo:
         required: true
         type: string
+      pr_number:
+        required: true
+        type: string
     outputs:
       pushed:
         description: "Whether normalization pushed a new commit"
@@ -75,4 +78,5 @@ jobs:
             --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/qc.yaml/dispatches" \
             -f ref='${{ inputs.pr_branch }}' \
-            -f inputs[sha]='${{ steps.push.outputs.sha }}'
+            -f inputs[sha]='${{ steps.push.outputs.sha }}' \
+            -f inputs[pr_number]='${{ inputs.pr_number }}'
