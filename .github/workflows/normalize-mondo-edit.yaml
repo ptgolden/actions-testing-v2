@@ -1,30 +1,22 @@
 name: Normalize mondo-edit.obo
 
 on:
-  workflow_call:
-    inputs:
-      pr_branch:
-        required: true
-        type: string
-      same_repo:
-        required: true
-        type: boolean
-      pr_repo:
-        required: true
-        type: string
-      pr_number:
-        required: true
-        type: string
-    outputs:
-      pushed:
-        description: "Whether normalization pushed a new commit"
-        value: ${{ jobs.normalize_mondo_edit.outputs.pushed }}
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+  PR_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+  PR_NUMBER: ${{ github.event.pull_request.number }}
+  SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
 
 jobs:
   normalize_mondo_edit:
     runs-on: ubuntu-latest
-    outputs:
-      pushed: ${{ steps.push.outputs.pushed }}
     permissions:
       actions: write
       contents: write
@@ -32,12 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.pr_repo }}
-          ref: ${{ inputs.pr_branch }}
+          repository: ${{ env.PR_REPO }}
+          ref: ${{ env.PR_BRANCH }}
           fetch-depth: 1
 
       - name: Configure git
-        if: ${{ inputs.same_repo }}
+        if: ${{ env.SAME_REPO == 'true' }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -56,10 +48,10 @@ jobs:
           if git diff --quiet -- src/ontology/mondo-edit.obo; then
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          elif [ "${{ inputs.same_repo }}" = "true" ]; then
+          elif [ "$SAME_REPO" = "true" ]; then
             git add src/ontology/mondo-edit.obo
             git commit -m "Normalize mondo-edit.obo"
-            git push origin "HEAD:${{ inputs.pr_branch }}"
+            git push origin "HEAD:${PR_BRANCH}"
             echo "pushed=true" >> "$GITHUB_OUTPUT"
             echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           else
@@ -70,13 +62,13 @@ jobs:
           fi
 
       - name: Trigger QC on normalized branch
-        if: ${{ inputs.same_repo }}
+        if: ${{ env.SAME_REPO == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api \
             --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/qc.yaml/dispatches" \
-            -f ref='${{ inputs.pr_branch }}' \
-            -f inputs[sha]='${{ steps.push.outputs.sha }}' \
-            -f inputs[pr_number]='${{ inputs.pr_number }}'
+            -f "ref=${PR_BRANCH}" \
+            -f "inputs[sha]=${{ steps.push.outputs.sha }}" \
+            -f "inputs[pr_number]=${PR_NUMBER}"

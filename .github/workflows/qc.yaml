@@ -1,5 +1,5 @@
 name: Ontology QC
-run-name: Ontology QC for PR #${{ inputs.pr_number }}
+run-name: Ontology QC for PR #${{ github.event.inputs.pr_number }}
 
 on:
   workflow_dispatch:
